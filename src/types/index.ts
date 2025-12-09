@@ -10,6 +10,8 @@ export interface SentencePair {
 
 export type GPTModel = 'gpt-5-mini' | 'gpt-4o-mini' | 'gpt-4o'
 
+export type TTSModel = 'tts-1' | 'tts-1-hd'
+
 export interface PlaybackState {
   currentIndex: number
   currentLanguage: 'english' | 'french'

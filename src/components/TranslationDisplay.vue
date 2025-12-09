@@ -20,11 +20,18 @@ function isLoading(
   pair: SentencePair,
   language: "english" | "french"
 ): boolean {
-  if (language === "french") {
-    return (
-      pair.status === "translating" ||
-      (pair.status === "generating-audio" && !pair.french)
-    );
+  if (pair.status === "generating-audio") {
+    // Show loading on English if English audio not yet generated
+    if (language === "english" && !pair.englishAudioBlob) {
+      return true;
+    }
+    // Show loading on French if English audio done but French audio not yet generated
+    if (language === "french" && pair.englishAudioBlob && !pair.frenchAudioBlob) {
+      return true;
+    }
+  }
+  if (language === "french" && pair.status === "translating") {
+    return true;
   }
   return false;
 }
@@ -49,7 +56,7 @@ function isLoading(
         <SentenceCard
           :sentence="pair.english"
           :is-active="isActive(index, 'english')"
-          :is-loading="false"
+          :is-loading="isLoading(pair, 'english')"
           language="english"
           @click="emit('sentence-click', index, 'english')"
         />

@@ -1,9 +1,9 @@
 import { ref, type Ref } from 'vue'
-import type { TTSVoice, GPTModel } from '../types'
+import type { TTSVoice, GPTModel, TTSModel } from '../types'
 
 const OPENAI_BASE_URL = 'https://api.openai.com/v1'
 
-export function useOpenAI(apiKey: Ref<string>, model: Ref<GPTModel>) {
+export function useOpenAI(apiKey: Ref<string>, model: Ref<GPTModel>, ttsModel: Ref<TTSModel>) {
   const isLoading = ref(false)
   const error = ref<string | null>(null)
 
@@ -54,7 +54,7 @@ export function useOpenAI(apiKey: Ref<string>, model: Ref<GPTModel>) {
     return data.choices[0].message.content.trim()
   }
 
-  async function generateSpeech(text: string, voice: TTSVoice = 'nova'): Promise<Blob> {
+  async function generateSpeech(text: string, voice: TTSVoice = 'nova', speed: number = 1.0): Promise<Blob> {
     if (!apiKey.value) {
       throw new Error('API key is required')
     }
@@ -66,10 +66,11 @@ export function useOpenAI(apiKey: Ref<string>, model: Ref<GPTModel>) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'tts-1',
+        model: ttsModel.value,
         voice: voice,
         input: text,
         response_format: 'mp3',
+        speed: speed,
       }),
     })
 

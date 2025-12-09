@@ -1,11 +1,11 @@
 import { ref, computed, type Ref } from 'vue'
-import type { SentencePair, TranslationProgress, PlaybackState, GPTModel } from '../types'
+import type { SentencePair, TranslationProgress, PlaybackState, GPTModel, TTSModel } from '../types'
 import { useOpenAI } from './useOpenAI'
 import { useAudioPlayer } from './useAudioPlayer'
 import { splitIntoSentences } from '../utils/textProcessor'
 
-export function useTranslation(apiKey: Ref<string>, model: Ref<GPTModel>) {
-  const { translateToFrench, generateSpeech } = useOpenAI(apiKey, model)
+export function useTranslation(apiKey: Ref<string>, model: Ref<GPTModel>, ttsModel: Ref<TTSModel>, speed: Ref<number>) {
+  const { translateToFrench, generateSpeech } = useOpenAI(apiKey, model, ttsModel)
   const audioPlayer = useAudioPlayer()
 
   const sentencePairs = ref<SentencePair[]>([])
@@ -100,7 +100,7 @@ export function useTranslation(apiKey: Ref<string>, model: Ref<GPTModel>) {
       progress.value.message = `Generating audio for sentence ${i + 1}...`
 
       try {
-        currentPair.englishAudioBlob = await generateSpeech(currentPair.english)
+        currentPair.englishAudioBlob = await generateSpeech(currentPair.english, 'nova', speed.value)
       } catch (err) {
         currentPair.status = 'error'
         currentPair.error = err instanceof Error ? err.message : 'English audio generation failed'
@@ -111,7 +111,7 @@ export function useTranslation(apiKey: Ref<string>, model: Ref<GPTModel>) {
       // Generate French audio
       if (currentPair.french) {
         try {
-          currentPair.frenchAudioBlob = await generateSpeech(currentPair.french)
+          currentPair.frenchAudioBlob = await generateSpeech(currentPair.french, 'nova', speed.value)
         } catch (err) {
           currentPair.status = 'error'
           currentPair.error = err instanceof Error ? err.message : 'French audio generation failed'
@@ -138,6 +138,7 @@ export function useTranslation(apiKey: Ref<string>, model: Ref<GPTModel>) {
     if (playbackState.value.isPlaying) {
       audioPlayer.stop()
       playbackState.value.isPlaying = false
+      currentSequencePosition++ // Skip to the next item
     }
 
     // Find the next playable item (with a limit to prevent infinite loops)
@@ -236,6 +237,71 @@ export function useTranslation(apiKey: Ref<string>, model: Ref<GPTModel>) {
     currentSequencePosition = 0
   }
 
+  async function regenerateAudio() {
+    if (sentencePairs.value.length === 0) return
+
+    stopPlayback()
+    lastError.value = null
+
+    const pairs = sentencePairs.value.filter(p => p.english && p.french)
+    if (pairs.length === 0) return
+
+    progress.value = {
+      phase: 'generating-audio',
+      current: 0,
+      total: pairs.length,
+      message: 'Regenerating audio...',
+    }
+
+    for (let i = 0; i < pairs.length; i++) {
+      const pair = pairs[i]
+      if (!pair) continue
+
+      progress.value.current = i + 1
+      progress.value.message = `Regenerating audio for sentence ${i + 1}...`
+      pair.status = 'generating-audio'
+
+      // Generate English audio
+      try {
+        pair.englishAudioBlob = await generateSpeech(pair.english, 'nova', speed.value)
+      } catch (err) {
+        pair.status = 'error'
+        pair.error = err instanceof Error ? err.message : 'English audio generation failed'
+        lastError.value = pair.error
+        continue
+      }
+
+      // Generate French audio
+      if (pair.french) {
+        try {
+          pair.frenchAudioBlob = await generateSpeech(pair.french, 'nova', speed.value)
+        } catch (err) {
+          pair.status = 'error'
+          pair.error = err instanceof Error ? err.message : 'French audio generation failed'
+          lastError.value = pair.error
+          continue
+        }
+      }
+
+      pair.status = 'complete'
+    }
+
+    progress.value = {
+      phase: 'complete',
+      current: pairs.length,
+      total: pairs.length,
+      message: 'Audio regenerated!',
+    }
+
+    // Reset playback position
+    currentSequencePosition = 0
+    playbackState.value = {
+      currentIndex: 0,
+      currentLanguage: 'english',
+      isPlaying: false,
+    }
+  }
+
   return {
     sentencePairs,
     progress,
@@ -248,5 +314,6 @@ export function useTranslation(apiKey: Ref<string>, model: Ref<GPTModel>) {
     stopPlayback,
     reset,
     dismissError,
+    regenerateAudio,
   }
 }

@@ -6,11 +6,13 @@ import TranslationDisplay from './components/TranslationDisplay.vue'
 import PlaybackControls from './components/PlaybackControls.vue'
 import { useTranslation } from './composables/useTranslation'
 import { useKeyboardShortcuts } from './composables/useKeyboardShortcuts'
-import type { GPTModel } from './types'
+import type { GPTModel, TTSModel } from './types'
 
 const apiKey = ref('')
 const inputText = ref('')
 const selectedModel = ref<GPTModel>('gpt-4o')
+const selectedTTSModel = ref<TTSModel>((localStorage.getItem('ttsModel') as TTSModel) || 'tts-1')
+const audioSpeed = ref(parseFloat(localStorage.getItem('audioSpeed') || '1.0'))
 
 const {
   sentencePairs,
@@ -24,7 +26,8 @@ const {
   stopPlayback,
   reset,
   dismissError,
-} = useTranslation(apiKey, selectedModel)
+  regenerateAudio,
+} = useTranslation(apiKey, selectedModel, selectedTTSModel, audioSpeed)
 
 const hasTranslations = computed(() => sentencePairs.value.length > 0)
 const canPlay = computed(() =>
@@ -64,11 +67,40 @@ function handleSentenceClick(index: number, language: 'english' | 'french') {
   playSentence(index, language)
 }
 
+function handleSpeedChange(event: Event) {
+  const target = event.target as HTMLInputElement
+  const newSpeed = parseFloat(target.value)
+  audioSpeed.value = newSpeed
+  localStorage.setItem('audioSpeed', newSpeed.toString())
+
+  // Regenerate audio if we have translations
+  if (hasTranslations.value) {
+    regenerateAudio()
+  }
+}
+
 const models: { value: GPTModel; label: string }[] = [
   { value: 'gpt-5-mini', label: 'GPT-5 Mini' },
   { value: 'gpt-4o', label: 'GPT-4o' },
   { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
 ]
+
+const ttsModels: { value: TTSModel; label: string }[] = [
+  { value: 'tts-1', label: 'TTS-1 (Fast)' },
+  { value: 'tts-1-hd', label: 'TTS-1 HD (Quality)' },
+]
+
+function handleTTSModelChange(event: Event) {
+  const target = event.target as HTMLSelectElement
+  const newModel = target.value as TTSModel
+  selectedTTSModel.value = newModel
+  localStorage.setItem('ttsModel', newModel)
+
+  // Regenerate audio if we have translations
+  if (hasTranslations.value) {
+    regenerateAudio()
+  }
+}
 </script>
 
 <template>
@@ -126,6 +158,41 @@ const models: { value: GPTModel; label: string }[] = [
               {{ model.label }}
             </option>
           </select>
+        </div>
+        <div class="max-w-xs">
+          <label class="block text-sm font-medium text-gray-700 mb-2">
+            TTS Model
+          </label>
+          <select
+            :value="selectedTTSModel"
+            @change="handleTTSModelChange"
+            :disabled="isProcessing"
+            class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100"
+          >
+            <option v-for="ttsModel in ttsModels" :key="ttsModel.value" :value="ttsModel.value">
+              {{ ttsModel.label }}
+            </option>
+          </select>
+        </div>
+        <div class="max-w-xs">
+          <label class="block text-sm font-medium text-gray-700 mb-2">
+            Audio Speed: {{ audioSpeed.toFixed(1) }}x
+          </label>
+          <input
+            type="range"
+            min="0.5"
+            max="1.5"
+            step="0.1"
+            :value="audioSpeed"
+            @change="handleSpeedChange"
+            :disabled="isProcessing"
+            class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          />
+          <div class="flex justify-between text-xs text-gray-500 mt-1">
+            <span>0.5x</span>
+            <span>1.0x</span>
+            <span>1.5x</span>
+          </div>
         </div>
       </section>
 

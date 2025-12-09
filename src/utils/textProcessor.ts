@@ -45,10 +45,9 @@ export function splitIntoSentences(text: string): string[] {
     processed = processed.replace(regex, placeholder)
   })
 
-  // Split on sentence-ending punctuation followed by space or end of string
-  // Also handle multiple spaces and newlines
+  // Split on sentence-ending punctuation followed by space, or on newlines
   const rawSentences = processed
-    .split(/(?<=[.!?])\s+/)
+    .split(/(?<=[.!?])\s+|\n+/)
     .map((s) => s.trim())
     .filter((s) => s.length > 0)
 
